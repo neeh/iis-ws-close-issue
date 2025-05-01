@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>WebSocket Test Client</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      font: inherit;
+      cursor: pointer;
+    }
+    section {
+      margin-top: 2rem;
+    }
+    .test {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .feedback {
+      color: #080;
+      margin: 0;
+    }
+    .feedback.fail {
+      color: #f00;
+    }
+  </style>
+</head>
+<body>
+  <h1>WebSocket Closing behavior test</h1>
+  <section>
+    <p><b>Test 1: Close requested by client</b></p>
+    <div class="test">
+      <button onclick="runTest1()">Run test 1</button>
+      <p class="feedback"></p>
+    </div>
+  </section>
+  <section>
+    <p><b>Test 2: Close requested by server</b></p>
+    <div class="test">
+      <button onclick="runTest2()">Run test 2</button>
+      <p class="feedback"></p>
+    </div>
+  </section>
+  <section>
+    <p><b>Test 3: Close requested by server during connection</b></p>
+    <div class="test">
+      <button onclick="runTest3()">Run test 3</button>
+      <p class="feedback"></p>
+    </div>
+  </section>
+  <script>
+    let connected_ = false;
+
+    function connect(closeDuringHandshake = false) {
+      if (connected_) return;
+      const secure = window.location.protocol === 'https:';
+      const protocol = secure ? 'wss:' : 'ws:';
+      const { host, pathname } = window.location;
+      const query = closeDuringHandshake ? '?close=1' : '';
+      const socket = new WebSocket(`${protocol}//${host}${pathname}${query}`);
+      socket.addEventListener('open', function () {
+        console.log('socket open');
+      });
+      socket.addEventListener('message', function (e) {
+        console.log('message received: ', e.data);
+      });
+      socket.addEventListener('close', function (e) {
+        console.log('socket closed', e.code, e.reason, e.wasClean);
+        connected_ = false;
+      });
+      socket.addEventListener('error', function (e) {
+        console.error(e);
+      });
+      connected_ = true;
+      return socket;
+    }
+
+    function setFeedback(testId, pass) {
+      const $feedback = document.getElementsByClassName('feedback')[testId - 1];
+      if (!$feedback) return;
+      const message = `Test ${testId} ${pass ? 'PASSES' : 'FAILS'}: The connection was closed ${pass ? 'properly' : 'prematurely'}.`;
+      $feedback.classList.toggle('fail', !pass);
+      $feedback.textContent = message;
+    }
+
+    function runTest1() {
+      if (connected_) return;
+
+      // Connects then closes the connection after 100ms
+      const socket = connect();
+      socket.addEventListener('close', (e) => {
+        setFeedback(1, e.wasClean);
+      });
+      setTimeout(() => {
+        socket.close(4000, 'Bye');
+      }, 100);
+    }
+
+    function runTest2() {
+      if (connected_) return;
+
+      // Instructs the server to kick the client after 100ms
+      const socket = connect();
+      socket.addEventListener('close', (e) => {
+        setFeedback(2, e.wasClean);
+      });
+      setTimeout(() => {
+        socket.send('kick');
+      }, 100);
+    }
+
+    function runTest3() {
+      if (connected_) return;
+
+      // Instructs the server to kick the client during the connection
+      const socket = connect(true);
+      socket.addEventListener('close', (e) => {
+        setFeedback(3, e.wasClean);
+      });
+    }
+  </script>
+</body>
+</html>
